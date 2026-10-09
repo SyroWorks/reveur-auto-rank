@@ -81,8 +81,9 @@ async function main() {
         `${BASE_URL}/memberships/${membershipId}:assignRole`,
         {
           method: "POST",
-          body: JSON.stringify({
-            role: `groups/${GROUP_ID}/roles/${CUSTOMER_ROLE_ID}`,
+         body: JSON.stringify({
+  role: `groups/${GROUP_ID}/roles/${CUSTOMER_ROLE_ID}`,
+}),
           }),
         }
       );
