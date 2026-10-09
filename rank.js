@@ -2,11 +2,27 @@
 const GROUP_ID = "653127537";
 
 const API_KEY = process.env.ROBLOX_API_KEY;
-const CUSTOMER_ROLE_ID = process.env.CUSTOMER_ROLE_ID;
-const DEFAULT_ROLE_ID = process.env.DEFAULT_ROLE_ID;
+const CUSTOMER_ROLE_ID = String(
+  process.env.CUSTOMER_ROLE_ID ?? ""
+).trim();
+const DEFAULT_ROLE_ID = String(
+  process.env.DEFAULT_ROLE_ID ?? ""
+).trim();
 
 if (!API_KEY || !CUSTOMER_ROLE_ID || !DEFAULT_ROLE_ID) {
   throw new Error("Missing required GitHub repository secrets.");
+}
+
+if (!/^\d+$/.test(CUSTOMER_ROLE_ID)) {
+  throw new Error(
+    "CUSTOMER_ROLE_ID must contain only the numeric role ID."
+  );
+}
+
+if (!/^\d+$/.test(DEFAULT_ROLE_ID)) {
+  throw new Error(
+    "DEFAULT_ROLE_ID must contain only the numeric role ID."
+  );
 }
 
 const BASE_URL =
@@ -33,17 +49,9 @@ async function robloxRequest(url, options = {}) {
   return text ? JSON.parse(text) : {};
 }
 
-function getResourceId(resource) {
-  if (!resource) return null;
-
-  // Ondersteunt zowel resource-namen als volledige URL's.
-  return resource.split("/").filter(Boolean).pop() ?? null;
-}
-
 async function main() {
   let pageToken;
   let processed = 0;
-  let skipped = 0;
 
   do {
     const url = new URL(`${BASE_URL}/memberships`);
@@ -56,30 +64,28 @@ async function main() {
     const data = await robloxRequest(url.toString());
 
     for (const member of data.groupMemberships ?? []) {
-      const currentRoleId = getResourceId(member.role);
+      const currentRoleId = member.role?.split("/").pop();
 
-      // Wijzig alleen leden met de standaardrol.
-      if (currentRoleId !== DEFAULT_ROLE_ID) {
-        skipped++;
-        continue;
-      }
+      // Alleen leden met de standaardrol wijzigen.
+      // Bestaande staffrollen blijven behouden.
+      if (currentRoleId !== DEFAULT_ROLE_ID) continue;
 
-      const membershipId = getResourceId(member.path);
+      const membershipId = member.path?.split("/").pop();
 
       if (!membershipId) {
-        console.warn("Membership ID missing; skipping member.");
+        console.warn("Skipping membership without an ID.");
         continue;
       }
 
-      const assignUrl =
-        `${BASE_URL}/memberships/${membershipId}:assignRole`;
-
-      await robloxRequest(assignUrl, {
-        method: "POST",
-        body: JSON.stringify({
-          role: `groups/${GROUP_ID}/roles/${CUSTOMER_ROLE_ID}`,
-        }),
-      });
+      await robloxRequest(
+        `${BASE_URL}/memberships/${membershipId}:assignRole`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            role: `groups/${GROUP_ID}/roles/${CUSTOMER_ROLE_ID}`,
+          }),
+        }
+      );
 
       processed++;
       console.log(
@@ -90,7 +96,7 @@ async function main() {
     pageToken = data.nextPageToken;
   } while (pageToken);
 
-  console.log(`Finished. Updated: ${processed}; skipped: ${skipped}`);
+  console.log(`Finished. Processed: ${processed}`);
 }
 
 main().catch((error) => {
