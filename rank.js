@@ -1,5 +1,6 @@
 
 const GROUP_ID = "653127537";
+
 const API_KEY = process.env.ROBLOX_API_KEY;
 const CUSTOMER_ROLE_ID = process.env.CUSTOMER_ROLE_ID;
 const DEFAULT_ROLE_ID = process.env.DEFAULT_ROLE_ID;
@@ -24,15 +25,25 @@ async function robloxRequest(url, options = {}) {
   const text = await response.text();
 
   if (!response.ok) {
-    throw new Error(`Roblox API ${response.status}: ${text}`);
+    throw new Error(
+      `Roblox API ${response.status}: ${text}`
+    );
   }
 
   return text ? JSON.parse(text) : {};
 }
 
+function getResourceId(resource) {
+  if (!resource) return null;
+
+  // Ondersteunt zowel resource-namen als volledige URL's.
+  return resource.split("/").filter(Boolean).pop() ?? null;
+}
+
 async function main() {
   let pageToken;
   let processed = 0;
+  let skipped = 0;
 
   do {
     const url = new URL(`${BASE_URL}/memberships`);
@@ -45,32 +56,41 @@ async function main() {
     const data = await robloxRequest(url.toString());
 
     for (const member of data.groupMemberships ?? []) {
-      const currentRoleId = member.role?.split("/").pop();
+      const currentRoleId = getResourceId(member.role);
 
-      // Alleen de standaardrol wijzigen, niet de bestaande staffrollen.
-      if (currentRoleId !== DEFAULT_ROLE_ID) continue;
+      // Wijzig alleen leden met de standaardrol.
+      if (currentRoleId !== DEFAULT_ROLE_ID) {
+        skipped++;
+        continue;
+      }
 
-      const membershipId = member.path?.split("/").pop();
-      if (!membershipId) continue;
+      const membershipId = getResourceId(member.path);
 
-      await robloxRequest(
-        `${BASE_URL}/memberships/${membershipId}:assignRole`,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            role: `${BASE_URL}/roles/${CUSTOMER_ROLE_ID}`,
-          }),
-        }
-      );
+      if (!membershipId) {
+        console.warn("Membership ID missing; skipping member.");
+        continue;
+      }
+
+      const assignUrl =
+        `${BASE_URL}/memberships/${membershipId}:assignRole`;
+
+      await robloxRequest(assignUrl, {
+        method: "POST",
+        body: JSON.stringify({
+          role: `groups/${GROUP_ID}/roles/${CUSTOMER_ROLE_ID}`,
+        }),
+      });
 
       processed++;
-      console.log(`Customer role assigned to ${membershipId}`);
+      console.log(
+        `Customer role assigned to membership ${membershipId}`
+      );
     }
 
     pageToken = data.nextPageToken;
   } while (pageToken);
 
-  console.log(`Finished. Processed: ${processed}`);
+  console.log(`Finished. Updated: ${processed}; skipped: ${skipped}`);
 }
 
 main().catch((error) => {
