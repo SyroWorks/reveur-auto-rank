@@ -1,0 +1,28 @@
+name: Reveur Auto Rank
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  assign-customer:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Run rank script
+        run: node rank.js
+        env:
+          ROBLOX_API_KEY: ${{ secrets.ROBLOX_API_KEY }}
+          CUSTOMER_ROLE_ID: ${{ secrets.CUSTOMER_ROLE_ID }}
+          DEFAULT_ROLE_ID: ${{ secrets.DEFAULT_ROLE_ID }}
